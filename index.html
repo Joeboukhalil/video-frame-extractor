@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Video Frame Extractor</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #1c1f2b, #222a3a);
+        color: white;
+        text-align: center;
+        padding: 40px;
+    }
+
+    h1 {
+        margin-bottom: 30px;
+        font-size: 32px;
+        color: #4fd1c5;
+    }
+
+    .card {
+        background: rgba(255,255,255,0.08);
+        padding: 30px;
+        border-radius: 20px;
+        max-width: 600px;
+        margin: auto;
+        box-shadow: 0 0 25px rgba(0,0,0,0.2);
+    }
+
+    input[type="file"] {
+        margin: 20px 0;
+        padding: 10px;
+        border-radius: 10px;
+        background: #333;
+        color: #4fd1c5;
+        cursor: pointer;
+    }
+
+    button {
+        background: #4fd1c5;
+        padding: 12px 25px;
+        border: none;
+        border-radius: 10px;
+        color: #1c1f2b;
+        font-size: 18px;
+        cursor: pointer;
+        margin-top: 10px;
+        font-weight: bold;
+        transition: 0.2s;
+    }
+
+    button:hover {
+        background: #38b2ac;
+    }
+
+    .progress-container {
+        margin-top: 20px;
+        width: 100%;
+        background: rgba(255,255,255,0.1);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 20px;
+        width: 0%;
+        background: linear-gradient(90deg, #4fd1c5, #81e6d9);
+        transition: width 0.2s;
+    }
+
+    #status {
+        margin-top: 10px;
+        font-size: 16px;
+        opacity: 0.9;
+    }
+</style>
+</head>
+<body>
+
+<h1>🎞 Video Frame Extractor</h1>
+
+<div class="card">
+    <input type="file" id="videoInput" accept="video/*">
+    <br>
+    <button id="startBtn">Start Extraction</button>
+
+    <h3>Upload Progress</h3>
+    <div class="progress-container"><div id="uploadBar" class="progress-bar"></div></div>
+
+    <h3>Extraction Progress</h3>
+    <div class="progress-container"><div id="extractBar" class="progress-bar"></div></div>
+
+    <p id="status"></p>
+</div>
+
+<!-- JSZip and FileSaver libraries for zip download -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<script>
+document.getElementById("startBtn").onclick = async () => {
+    const fileInput = document.getElementById("videoInput");
+    const uploadBar = document.getElementById("uploadBar");
+    const extractBar = document.getElementById("extractBar");
+    const status = document.getElementById("status");
+
+    if (!fileInput.files.length) {
+        alert("Please select a video.");
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    // ---------------------
+    // Simulate Upload
+    // ---------------------
+    status.textContent = "Uploading video...";
+    for (let i = 0; i <= 100; i += 5) {
+        uploadBar.style.width = i + "%";
+        await new Promise(r => setTimeout(r, 20));
+    }
+    status.textContent = "Upload complete! Preparing video...";
+
+    // ---------------------
+    // Load Video
+    // ---------------------
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.src = url;
+    await new Promise(resolve => video.onloadedmetadata = resolve);
+
+    const fps = 25; // frames per second
+    const totalFrames = Math.floor(video.duration * fps);
+
+    extractBar.style.width = "0%";
+    status.textContent = "Extracting " + totalFrames + " frames...";
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const zip = new JSZip();
+    let frame = 0;
+
+    async function extractFrame() {
+        if (frame >= totalFrames) {
+            status.textContent = "All frames extracted!";
+            extractBar.style.width = "100%";
+
+            const content = await zip.generateAsync({ type: "blob" });
+            
+            // Create a visible download button
+            const downloadBtn = document.createElement("button");
+            downloadBtn.textContent = "Download Frames ZIP";
+            downloadBtn.style.marginTop = "20px";
+            downloadBtn.onclick = () => saveAs(content, "frames.zip");
+            
+            document.querySelector(".card").appendChild(downloadBtn);
+            return;
+        }
+
+        video.currentTime = frame / fps;
+
+        await new Promise(resolve => {
+            video.onseeked = resolve;
+        });
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/png");
+        const base64 = dataUrl.split(",")[1];
+        zip.file(`frame_${frame}.png`, base64, { base64: true });
+
+        frame++;
+        extractBar.style.width = Math.round((frame / totalFrames) * 100) + "%";
+        status.textContent = `Extracting frame ${frame}/${totalFrames}`;
+
+        requestAnimationFrame(extractFrame);
+    }
+
+    extractFrame();
+};
+</script>
+
+</body>
+</html>
